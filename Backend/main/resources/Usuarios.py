@@ -7,7 +7,7 @@ import os
 
 # Configuración de S3
 S3_BUCKET = "botkevin"
-S3_REGION = "us-east-1"  # Ejemplo: "us-west-1"
+S3_REGION = "us-east-2"  # Ejemplo: "us-west-1"
 S3_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
 S3_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 
@@ -19,9 +19,15 @@ s3_client = boto3.client(
     region_name=S3_REGION
 )
 
-def upload_image_to_s3(image_data, filename):
+def generate_filename():
+    """Genera un nombre de archivo con el formato 'img_<timestamp>.jpg'."""
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Formato: AAAAMMDD_HHMMSS
+    return f"img_{timestamp}.jpg"
+
+def upload_image_to_s3(image_data):
     """Sube la imagen a S3 y devuelve la URL pública."""
     try:
+        filename = generate_filename()  # Generar el nombre de archivo con la fecha y hora
         s3_client.put_object(Bucket=S3_BUCKET, Key=filename, Body=image_data)
         return f"https://{S3_BUCKET}.s3.{S3_REGION}.amazonaws.com/{filename}"
     except Exception as e:
