@@ -16,7 +16,7 @@ try:
     locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
 except locale.Error:
     locale.setlocale(locale.LC_TIME, 'C')  # Usa el locale predeterminado si falla
-    
+
 cliente_parser = reqparse.RequestParser()
 cliente_parser.add_argument('cellphone', type=str, required=True, help="Cellphone is required")
 cliente_parser.add_argument('name', type=str, required=True, help="Name is required")
@@ -121,7 +121,7 @@ class Clientes(Resource):
             ]
 
             # Retornar las horas disponibles
-            return {"fecha": str(fecha_formateada), "slots": slots_disponibles}, 200
+            return {"fecha": str(fecha_formateada.strftime("%d-%m-%Y")), "slots": slots_disponibles}, 200
         elif nextdays:
             try:
                 # Obtener la fecha actual
