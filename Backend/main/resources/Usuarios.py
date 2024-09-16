@@ -5,6 +5,7 @@ from .. import db
 from main.models import UsuarioModel
 from datetime import datetime  # Importar datetime para la generación del timestamp
 import os
+from .db_utils import create_client_table_for_user
 
 # Configuración de S3
 S3_BUCKET = "botkevin"

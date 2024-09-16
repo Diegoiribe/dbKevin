@@ -10,7 +10,7 @@ import time
 from datetime import datetime
 from sqlalchemy import Table, MetaData, extract, cast, Date
 import locale
-import logging
+
 
 # Configuración de locales para fechas en español
 try:
