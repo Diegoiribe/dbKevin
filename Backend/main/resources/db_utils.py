@@ -1,7 +1,7 @@
 from sqlalchemy.schema import CreateTable
 from sqlalchemy import text
 from main import db
-from .models.Cliente import Cliente as ClienteModel  # Importamos el modelo de Cliente
+from ..models.Cliente import Cliente as ClienteModel  # Importamos el modelo de Cliente
 
 def create_client_table_for_user(username):
     """Crea una tabla personalizada para los clientes de cada usuario usando el modelo Cliente."""
