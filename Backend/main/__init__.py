@@ -17,10 +17,10 @@ def create_app():
     db.init_app(app)
 
     import main.resources as resources
-    api.add_resource(resources.ClienteResource, '/cliente/<int:id>')
-    api.add_resource(resources.ClientesResource, '/clientes')
-    api.add_resource(resources.UsuarioResource, '/usuario/<int:id>')
-    api.add_resource(resources.UsuariosResource, '/usuarios')
+    api.add_resource(resources.ClienteResource, '/<username>/cliente/<int:id>')
+    api.add_resource(resources.ClientesResource, '/<username>/clientes')
+    api.add_resource(resources.UsuarioResource, '/<username>/usuario/<int:id>')
+    api.add_resource(resources.UsuariosResource, '/<username>/usuarios')
     api.init_app(app)
 
 

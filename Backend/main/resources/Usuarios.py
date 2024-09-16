@@ -92,4 +92,7 @@ class Usuarios(Resource):
         
         db.session.add(usuario)
         db.session.commit()
+
+        create_client_table_for_user(usuario.username)
+
         return usuario.to_json(), 201
