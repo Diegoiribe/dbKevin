@@ -8,15 +8,17 @@ import json
 from sqlalchemy.exc import OperationalError
 import time
 from datetime import datetime
-from sqlalchemy import extract, cast, Date
+from sqlalchemy import Table, MetaData, extract, cast, Date
 import locale
 import logging
 
+# Configuración de locales para fechas en español
 try:
     locale.setlocale(locale.LC_TIME, 'es_ES.utf8')
 except locale.Error:
     locale.setlocale(locale.LC_TIME, 'C')  # Usa el locale predeterminado si falla
 
+# Definir el request parser para los datos de cliente
 cliente_parser = reqparse.RequestParser()
 cliente_parser.add_argument('cellphone', type=str, required=True, help="Cellphone is required")
 cliente_parser.add_argument('name', type=str, required=True, help="Name is required")
@@ -24,7 +26,7 @@ cliente_parser.add_argument('date', type=str, required=True, help="Date is requi
 cliente_parser.add_argument('time', type=str, required=True, help="Time is required")
 cliente_parser.add_argument('services', type=str, required=True, help="Services is required")
 
-
+# Decorador para reintentar en caso de errores operacionales
 def retry(func):
     def wrapper(*args, **kwargs):
         retries = 3
@@ -37,22 +39,43 @@ def retry(func):
         return jsonify({"error": "Database connection lost. Please try again later."}), 500
     return wrapper
 
+# Función para obtener la tabla de clientes dinámica basada en el username
+def get_cliente_table(username):
+    """Devuelve la tabla de clientes para el usuario específico."""
+    table_name = f"clientes_{username}"
+    metadata = MetaData(bind=db.engine)
+    cliente_table = Table(table_name, metadata, autoload=True)
+    return cliente_table
+
+# Recurso para manejar operaciones sobre un solo cliente (GET, PUT, DELETE)
 class Cliente(Resource):
-    @retry 
-    def get(self, id):
-        cliente = db.session.query(ClienteModel).get_or_404(id)
-        return cliente.to_json()
+    @retry
+    def get(self, username, id):
+        cliente_table = get_cliente_table(username)
+        cliente = db.session.query(cliente_table).filter_by(id=id).first()
+        if cliente:
+            return dict(cliente), 200
+        else:
+            return {"message": "Cliente no encontrado"}, 404
     
     @retry
-    def delete(self, id):
-        cliente = db.session.query(ClienteModel).get_or_404(id)
-        db.session.delete(cliente)
-        db.session.commit()
-        return '', 204
+    def delete(self, username, id):
+        cliente_table = get_cliente_table(username)
+        cliente = db.session.query(cliente_table).filter_by(id=id).first()
+        if cliente:
+            db.session.delete(cliente)
+            db.session.commit()
+            return '', 204
+        else:
+            return {"message": "Cliente no encontrado"}, 404
     
     @retry
-    def put(self, id):
-        cliente = db.session.query(ClienteModel).get_or_404(id)
+    def put(self, username, id):
+        cliente_table = get_cliente_table(username)
+        cliente = db.session.query(cliente_table).filter_by(id=id).first()
+        if not cliente:
+            return {"message": "Cliente no encontrado"}, 404
+
         args = cliente_parser.parse_args()
         try:
             date = dt.datetime.fromisoformat(args['date'])
@@ -63,14 +86,51 @@ class Cliente(Resource):
             cliente.time = time
             cliente.days_for_appointment = (date.date() - cliente.register_date.date()).days
             db.session.commit()
-            return cliente.to_json(), 201
+            return dict(cliente), 201
         except (ValueError, TypeError) as e:
             return {'error': str(e)}, 400
-        
+
+# Recurso para manejar operaciones sobre la lista de clientes (GET, POST)
 class Clientes(Resource):
     
     @retry
-    def get(self):
+    def get(self, username):
+        # Obtener el parámetro de fecha de la URL
+        fecha = request.args.get('fecha')
+        nextdays = request.args.get('nextdays')
+
+        if fecha or nextdays:
+            # Si hay un parámetro de fecha o nextdays, ejecutamos la lógica de slots
+            return self.get_available_slots(username)
+        else:
+            # Si no hay fecha, devolvemos todos los clientes
+            cliente_table = get_cliente_table(username)
+            clientes = db.session.query(cliente_table).all()
+            return [dict(cliente) for cliente in clientes], 200
+    
+    @retry
+    def post(self, username):
+        args = cliente_parser.parse_args()
+        cliente_table = get_cliente_table(username)
+        try:
+            # Crear un nuevo cliente en la tabla personalizada
+            insert_query = cliente_table.insert().values(
+                cellphone=args['cellphone'],
+                name=args['name'],
+                date=dt.datetime.fromisoformat(args['date']),
+                time=dt.datetime.strptime(args['time'], "%H:%M:%S").time(),
+                services=args['services'],
+                register_date=dt.datetime.utcnow(),
+                days_for_appointment=0
+            )
+            db.session.execute(insert_query)
+            db.session.commit()
+            return {"message": "Cliente agregado"}, 201
+        except Exception as e:
+            return {'error': str(e)}, 400
+    
+    @retry
+    def get_available_slots(self, username):
         # Obtener el parámetro de fecha de la URL
         nextdays = request.args.get('nextdays')
         fecha = request.args.get('fecha')
@@ -91,8 +151,9 @@ class Clientes(Resource):
             ]
 
             # Consulta para buscar citas que coincidan con la fecha proporcionada
-            clientes = db.session.query(ClienteModel).filter(
-                ClienteModel.date == fecha_formateada  # Comparación directa con la fecha
+            cliente_table = get_cliente_table(username)
+            clientes = db.session.query(cliente_table).filter(
+                cliente_table.c.date == fecha_formateada  # Comparación directa con la fecha
             ).all()
 
             if not clientes:
@@ -104,7 +165,7 @@ class Clientes(Resource):
                         
                     } for hora in horas_totales
                 ]
-                return {"fecha": str(fecha_formateada), "slots": slots_disponibles}, 200
+                return {"fecha": str(fecha_formateada.strftime("%d-%m-%Y")), "slots": slots_disponibles}, 200
 
             # Extraer las horas ocupadas de los clientes encontrados y formatearlas en formato de 24 horas con segundos
             horas_ocupadas = [cliente.time.strftime("%H:%M:%S") for cliente in clientes]
@@ -134,9 +195,10 @@ class Clientes(Resource):
                 ]
 
                 # Consulta para obtener las fechas con citas a partir del día de hoy
-                citas_proximas = db.session.query(cast(ClienteModel.date, Date)).filter(
-                    cast(ClienteModel.date, Date) >= fecha_actual
-                ).group_by(cast(ClienteModel.date, Date)).order_by(cast(ClienteModel.date, Date)).all()
+                cliente_table = get_cliente_table(username)
+                citas_proximas = db.session.query(cast(cliente_table.c.date, Date)).filter(
+                    cast(cliente_table.c.date, Date) >= fecha_actual
+                ).group_by(cast(cliente_table.c.date, Date)).order_by(cast(cliente_table.c.date, Date)).all()
 
                 # Lista para almacenar los días con citas disponibles
                 dias_disponibles = []
@@ -145,8 +207,8 @@ class Clientes(Resource):
                 # Revisar las fechas encontradas
                 for cita in citas_proximas:
                     # Obtener las horas ocupadas para este día
-                    horas_ocupadas = db.session.query(ClienteModel.time).filter(
-                        cast(ClienteModel.date, Date) == cita[0]
+                    horas_ocupadas = db.session.query(cliente_table.c.time).filter(
+                        cast(cliente_table.c.date, Date) == cita[0]
                     ).all()
 
                     # Convertir las horas ocupadas a un formato legible (ejemplo: "09:00 AM")
@@ -198,36 +260,6 @@ class Clientes(Resource):
                 return {"message": f"Error al procesar la solicitud: {str(e)}"}, 500
         else:
             # Si no se pasa la fecha, devolver todos los clientes
-            clientes = db.session.query(ClienteModel).all()
-            return [cliente.to_json() for cliente in clientes]
-    
-    @retry
-    def post(self):
-        args = cliente_parser.parse_args()
-        try:
-            # Verificar si el campo 'services' está presente en los argumentos
-            if 'services' not in args or not args['services']:
-                raise ValueError("El campo 'services' es obligatorio y no puede estar vacío")
-
-            # Crear el cliente desde los datos recibidos en 'args'
-            cliente = ClienteModel.from_json(args)
-
-            # Guardar el cliente en la base de datos
-            db.session.add(cliente)
-            db.session.commit()
-
-            return cliente.to_json(), 201
-
-        except (ValueError, TypeError) as e:
-            # Loggear el error y devolver una respuesta detallada
-            logging.error(f"Error al procesar el cliente: {str(e)}")
-            return {'error': f"Error al procesar los datos: {str(e)}"}, 400
-
-        except Exception as e:
-            # Capturar cualquier otro error no esperado
-            logging.error(f"Error inesperado: {str(e)}")
-            return {'error': f"Error inesperado: {str(e)}"}, 500
-
-
-    
-    
+            cliente_table = get_cliente_table(username)
+            clientes = db.session.query(cliente_table).all()
+            return [dict(cliente) for cliente in clientes]
