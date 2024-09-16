@@ -3,19 +3,20 @@ from flask_restful import Resource
 from flask import request, jsonify
 from .. import db
 from main.models import UsuarioModel
+from datetime import datetime  # Importar datetime para la generación del timestamp
 import os
 
 # Configuración de S3
 S3_BUCKET = "botkevin"
-S3_REGION = "us-east-2"  # Ejemplo: "us-west-1"
+S3_REGION = "us-east-2"
 S3_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY_ID")
 S3_SECRET_KEY = os.getenv("AWS_SECRET_ACCESS_KEY")
 
-# Asegúrate de utilizar las variables correctas aquí
+# Crear el cliente de S3
 s3_client = boto3.client(
     "s3",
-    aws_access_key_id=S3_ACCESS_KEY,  # Usar la variable extraída del entorno
-    aws_secret_access_key=S3_SECRET_KEY,  # Usar la variable extraída del entorno
+    aws_access_key_id=S3_ACCESS_KEY,
+    aws_secret_access_key=S3_SECRET_KEY,
     region_name=S3_REGION
 )
 
@@ -52,8 +53,7 @@ class Usuario(Resource):
         if 'imagen' in request.files:
             imagen_file = request.files['imagen']
             # Subir la imagen a S3 y obtener la URL
-            filename = f"{usuario.username}_imagen.jpg"
-            usuario.imagen = upload_image_to_s3(imagen_file.read(), filename)
+            usuario.imagen = upload_image_to_s3(imagen_file.read())  # Subir la imagen con un nombre generado automáticamente
         
         # Obtener datos del cuerpo de la solicitud (JSON o formulario)
         data = request.form or request.get_json()
@@ -78,8 +78,7 @@ class Usuarios(Resource):
         
         if imagen_file:
             # Subir la imagen a S3 y obtener la URL
-            filename = f"{request.form.get('username')}_imagen.jpg"
-            imagen_url = upload_image_to_s3(imagen_file.read(), filename)
+            imagen_url = upload_image_to_s3(imagen_file.read())  # Subir la imagen con un nombre generado automáticamente
         
         # Manejar otros datos del formulario o JSON
         data = request.form or request.get_json()
