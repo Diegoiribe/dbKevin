@@ -5,7 +5,7 @@ from ..models.Cliente import Cliente as ClienteModel  # Importamos el modelo de 
 
 def create_client_table_for_user(username):
     """Crea una tabla personalizada para los clientes de cada usuario usando el modelo Cliente."""
-    table_name = f"clientes_{username}"
+    table_name = f"{username}"
     cliente_model_table = ClienteModel.__table__
     
     create_table_statement = CreateTable(cliente_model_table).compile(db.engine)
