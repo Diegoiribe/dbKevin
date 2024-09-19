@@ -13,7 +13,13 @@ def create_app():
     load_dotenv()
     CORS(app)
 
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://root:PyVpQmIPXZFbqIpWjWgBxYFWcfNyLuwW@autorack.proxy.rlwy.net:48045/railway"
+    PATH = os.getenv("DATABASE_PATH")
+    DB_NAME = os.getenv("DATABASE_NAME")
+    if not os.path.exists(f"{PATH}{DB_NAME}"):
+        os.chdir(f"{PATH}")
+        file = os.open(f"{DB_NAME}", os.O_CREAT)
+
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{PATH}{DB_NAME}"
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     db.init_app(app)
 

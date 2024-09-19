@@ -62,6 +62,8 @@ class Usuario(Resource):
         usuario.email = data.get("email", usuario.email)
         usuario.password = data.get("password", usuario.password)
         usuario.active = data.get("active", usuario.active)
+        usuario.workdays = data.get("workdays", usuario.workdays)
+        usuario.workingHours = data.get("workingHours", usuario.workingHours)
         
         db.session.commit()
         return usuario.to_json(), 201
@@ -88,7 +90,9 @@ class Usuarios(Resource):
             email=data.get("email"),
             password=data.get("password"),
             active=data.get("active", True),  # Valor por defecto a True
-            imagen=imagen_url  # Almacenar la URL de la imagen si existe
+            imagen=imagen_url,  # Almacenar la URL de la imagen si existe
+            workdays=data.get("workdays"),
+            workingHours=data.get("workingHours")
         )
         
         db.session.add(usuario)
